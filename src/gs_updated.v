@@ -113,14 +113,14 @@ module gaussian_blur_rgb565_320x240 (
         (B5(r1_0)<<1) + (B5(r1_1)<<2) + (B5(r1_2)<<1) +
         B5(r2_0) + (B5(r2_1)<<1) + B5(r2_2);
 
-    wire [4:0]  blurR = sumR[9:4];
-    wire [5:0]  blurG = sumG[9:4];
+    wire [4:0] blurR = sumR[8:4];
+    wire [4:0] blurB = sumB[8:4];
     wire [4:0]  blurB = sumB[9:4];
     wire [15:0] blurred_pixel = {blurR, blurG, blurB};
 
-    wire [8:0]  out_x    = x_d - 1;
-    wire [7:0]  out_y    = y_d - 1;
-    wire [16:0] out_addr = out_y * W + out_x;
+    wire [8:0]  out_x    = x_d - 9'd1;
+    wire [7:0]  out_y    = y_d - 8'd1;
+    wire [16:0] out_addr = ({9'b0, out_y} * 17'd320) + {8'b0, out_x};
 
     integer i;
 
@@ -160,10 +160,11 @@ module gaussian_blur_rgb565_320x240 (
                 if (addr == N-1) begin
                     running<=0; done<=1;
                 end else begin
-                    addr <= addr + 1;
-                    if (x == W-1) begin x<=0; y<=y+1; end
-                    else x <= x+1;
-                end
+                    addr <= addr + 17'd1;
+                    if (x == 9'd319) begin
+                        x <= 9'd0;
+                        y <= y + 8'd1;
+                    end
             end
         end
     end

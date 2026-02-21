@@ -18,8 +18,8 @@ module vga_controller (
     localparam H_TOTAL = H_VISIBLE + H_FRONT + H_SYNC + H_BACK; // 800
     localparam V_TOTAL = V_VISIBLE + V_FRONT + V_SYNC + V_BACK; // 525
 
-    reg [9:0] hcount = 0;
-    reg [9:0] vcount = 0;
+    reg [9:0] hcount = 10'd0;
+    reg [9:0] vcount = 10'd0;
 
     always @(posedge clk_25mhz) begin
         if (rst) begin
@@ -44,8 +44,8 @@ module vga_controller (
 
     // Pixel-double: map 640x480 → 320x240 by dividing coords by 2
     wire [8:0] img_x = hcount[9:1];  // hcount / 2
-    wire [7:0] img_y = vcount[9:1];  // vcount / 2
-    assign pixel_addr = img_y * 320 + img_x;
+    wire [7:0] img_y = vcount[8:1];  // vcount / 2
+    assign pixel_addr = ({9'b0, img_y} * 17'd320) + {8'b0, img_x};
 
     assign vga_r = active ? pixel_data[15:11] : 5'b0;
     assign vga_g = active ? pixel_data[10:5]  : 6'b0;
