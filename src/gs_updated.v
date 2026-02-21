@@ -1,6 +1,6 @@
 // ============================================================
 // Gaussian Blur (3x3) for DE1-SoC FPGA synthesis
-// - frame_buffer loaded via .mif at synthesis time
+// - frame_buffer loaded from output.mif via altsyncram ROM
 // - blur_buffer output streamed to VGA controller
 // ============================================================
 `timescale 1ns/1ps
@@ -20,12 +20,48 @@ module gaussian_blur_rgb565_320x240 (
     localparam integer N = W * H;  // 76800
 
     // -----------------------------------------------------------
-    // Input frame buffer — initialized from output.mif at synthesis
+    // Input frame buffer — ROM initialized from output.mif
+    // Instantiated as altsyncram for Quartus synthesis
     // -----------------------------------------------------------
-    reg [15:0] frame_buffer [0:N-1];
-    initial begin
-        $readmemh("output.hex", frame_buffer);  // Quartus uses .mif; keep for sim fallback
-    end
+    wire [15:0] frame_pixel;  // data out from ROM at addr
+
+    altsyncram #(
+        .operation_mode         ("ROM"),
+        .width_a                (16),
+        .widthad_a              (17),       // 2^17 = 131072 >= 76800
+        .numwords_a             (76800),
+        .outdata_reg_a          ("UNREGISTERED"),
+        .init_file              ("output.mif"),
+        .lpm_hint               ("ENABLE_RUNTIME_MOD=NO"),
+        .lpm_type               ("altsyncram"),
+        .read_during_write_mode_port_a ("NEW_DATA_NO_NBE_READ"),
+        .power_up_uninitialized ("FALSE")
+    ) frame_rom (
+        .address_a  (addr),
+        .clock0     (clk),
+        .q_a        (frame_pixel),
+        // unused ports
+        .aclr0      (1'b0),
+        .aclr1      (1'b0),
+        .address_b  (1'b1),
+        .addressstall_a (1'b0),
+        .addressstall_b (1'b0),
+        .byteena_a  (1'b1),
+        .byteena_b  (1'b1),
+        .clock1     (1'b1),
+        .clocken0   (1'b1),
+        .clocken1   (1'b1),
+        .clocken2   (1'b1),
+        .clocken3   (1'b1),
+        .data_a     (16'b0),
+        .data_b     (1'b1),
+        .eccstatus  (),
+        .q_b        (),
+        .rden_a     (1'b1),
+        .rden_b     (1'b1),
+        .wren_a     (1'b0),
+        .wren_b     (1'b0)
+    );
 
     // -----------------------------------------------------------
     // Output blur buffer — VGA controller reads from here
@@ -36,7 +72,7 @@ module gaussian_blur_rgb565_320x240 (
     assign vga_pixel = blur_buffer[vga_addr];
 
     // -----------------------------------------------------------
-    // Line buffers, window registers, counters — UNCHANGED
+    // Line buffers, window registers, counters
     // -----------------------------------------------------------
     reg [15:0] line1 [0:W-1];
     reg [15:0] line2 [0:W-1];
@@ -50,6 +86,8 @@ module gaussian_blur_rgb565_320x240 (
     reg [7:0]  y_d;
     reg [16:0] addr_d;
 
+    // frame_pixel from ROM is now registered (1-cycle latency).
+    // p_mid / p_top come from internal line buffers (same as before).
     reg [15:0] p_in, p_mid, p_top, p_in_d;
 
     reg [15:0] r0_0, r0_1, r0_2;
@@ -105,7 +143,8 @@ module gaussian_blur_rgb565_320x240 (
                 x_d<=0; y_d<=0; addr_d<=0;
             end
             if (running) begin
-                p_in   <= frame_buffer[addr];
+                // frame_pixel is the registered ROM output for current addr
+                p_in   <= frame_pixel;
                 p_mid  <= line1[x];
                 p_top  <= line2[x];
                 x_d    <= x;   y_d    <= y;   addr_d <= addr;
